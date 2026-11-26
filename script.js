@@ -6,7 +6,7 @@
 const CONFIG = {
   // Pegar aquí la URL de la "aplicación web" de Apps Script (termina en /exec).
   // Mientras esté vacía, el sitio muestra DATOS DE DEMOSTRACIÓN.
-  API_URL: "https://script.google.com/macros/s/AKfycbztBYV9mmh-zTxVb7HGG6ZRznWbwUE4h1j0WweyS5pEhAXdYlvOoY1--a-LJbz8yTR_uw/exec",
+  API_URL: "",
   // Imagen de fondo de la portada (opcional). Ej.: "fondo.jpg". Vacío = fondo institucional.
   HERO_IMAGE: ""
 };
@@ -85,13 +85,17 @@ async function loadData() {
   st.className = "status";
   st.innerHTML = '<div class="spinner"></div>Cargando publicaciones…';
   try {
-    if (!CONFIG.API_URL) { EVENTS = demoData(); }
+    if (!CONFIG.API_URL) { EVENTS = demoData().map(e => ({ ...e, imgs: e.images.map(u => ({ url: u })), docs: [] })); }
     else {
       const res = await fetch(CONFIG.API_URL);
       if (!res.ok) throw new Error("HTTP " + res.status);
       const json = await res.json();
       if (json.error) throw new Error(json.error);
-      EVENTS = (json.events || []).map(e => ({ ...e, category: e.category }));
+      EVENTS = (json.events || []).map(e => ({
+        ...e,
+        imgs: (e.files || []).filter(f => f.type === "image").map(f => ({ id: f.id, url: f.thumb })),
+        docs: (e.files || []).filter(f => f.type !== "image" && f.type !== "missing")
+      }));
     }
     st.innerHTML = "";
     if (!CONFIG.API_URL) st.innerHTML = '<div class="demo-flag">Modo demostración: contenido de ejemplo. Configurá API_URL en script.js.</div>';
@@ -137,10 +141,11 @@ function filtered() {
   });
 }
 function cardHTML(e, idx) {
-  const img = e.images && e.images[0]
-    ? `<img src="${esc(e.images[0])}" alt="${esc(e.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'noimg',textContent:'📷'}))">`
-    : '<div class="noimg">📷</div>';
-  const n = (e.images || []).length;
+  const first = (e.imgs || [])[0];
+  const img = first
+    ? `<img src="${esc(first.url)}" data-fid="${esc(first.id || "")}" alt="${esc(e.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="imgFallback(this)">`
+    : `<div class="noimg">${(e.docs || []).length ? "📄" : "📷"}</div>`;
+  const n = (e.imgs || []).length;
   const cat = CATEGORIES.find(c => c.id === e._cat);
   return `<button class="card reveal" data-i="${idx}" type="button" aria-label="Abrir: ${esc(e.title)}">
     <div class="card__img">${img}${n > 1 ? `<span class="card__count">${n} fotos</span>` : ""}</div>
@@ -177,6 +182,40 @@ function observeReveal() {
   document.querySelectorAll(".reveal:not(.is-in)").forEach(el => io ? io.observe(el) : el.classList.add("is-in"));
 }
 
+/* ---------- 7b. ARCHIVOS VÍA APPS SCRIPT ----------
+   Si la miniatura pública de Drive no carga (archivo no compartido, política del
+   dominio, etc.), el archivo se pide al script, que lo lee con permiso del dueño. */
+const blobCache = {};
+async function fetchBlobUrl(id) {
+  if (blobCache[id]) return blobCache[id];
+  blobCache[id] = (async () => {
+    const res = await fetch(CONFIG.API_URL + (CONFIG.API_URL.includes("?") ? "&" : "?") + "action=file&id=" + encodeURIComponent(id));
+    const j = await res.json();
+    if (j.error) throw new Error(j.error);
+    const bin = atob(j.data), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return URL.createObjectURL(new Blob([bytes], { type: j.mime }));
+  })();
+  try { return await blobCache[id]; } catch (e) { delete blobCache[id]; throw e; }
+}
+window.imgFallback = function (img) {
+  const id = img.dataset.fid;
+  if (!id || img.dataset.tried || !CONFIG.API_URL) { return showNoImg(img); }
+  img.dataset.tried = "1";
+  fetchBlobUrl(id).then(u => { img.src = u; }).catch(() => showNoImg(img));
+};
+function showNoImg(img) {
+  if (img.closest(".card__img")) img.replaceWith(Object.assign(document.createElement("div"), { className: "noimg", textContent: "📷" }));
+  else img.style.visibility = "hidden";
+}
+async function openDoc(id, btn) {
+  const w = window.open("", "_blank");            // se abre ya, para evitar el bloqueo de ventanas
+  const old = btn.textContent; btn.textContent = "Cargando…"; btn.disabled = true;
+  try { const u = await fetchBlobUrl(id); w ? (w.location = u) : (location.href = u); }
+  catch (e) { if (w) w.close(); alert("No se pudo abrir el documento. Intentá de nuevo."); }
+  btn.textContent = old; btn.disabled = false;
+}
+
 /* ---------- 8. MODAL Y GALERÍA ---------- */
 let cur = null, gi = 0;
 function openModal(i) {
@@ -192,14 +231,22 @@ function openModal(i) {
   $(".modal__close").focus();
 }
 function showPhoto(n) {
-  const imgs = cur.images || [];
+  const imgs = cur.imgs || [];
   const mImg = $("#mImg");
   gi = (n + imgs.length) % (imgs.length || 1);
   mImg.style.display = imgs.length ? "" : "none";
-  if (imgs.length) { mImg.src = imgs[gi]; mImg.alt = cur.title; }
+  if (imgs.length) {
+    const it = imgs[gi];
+    mImg.onerror = () => imgFallback(mImg);
+    mImg.dataset.fid = it.id || ""; mImg.dataset.tried = "";
+    mImg.src = it.url; mImg.alt = cur.title;
+  }
   $("#gPrev").hidden = $("#gNext").hidden = imgs.length < 2;
-  $("#gThumbs").innerHTML = imgs.length < 2 ? "" : imgs.map((u, k) =>
-    `<button type="button" data-k="${k}" class="${k === gi ? "is-on" : ""}" aria-label="Foto ${k + 1}"><img src="${esc(u)}" alt="" referrerpolicy="no-referrer"></button>`).join("");
+  $("#gThumbs").innerHTML = imgs.length < 2 ? "" : imgs.map((it, k) =>
+    `<button type="button" data-k="${k}" class="${k === gi ? "is-on" : ""}" aria-label="Foto ${k + 1}"><img src="${esc(it.url)}" data-fid="${esc(it.id || "")}" alt="" referrerpolicy="no-referrer" onerror="imgFallback(this)"></button>`).join("");
+  // Documentos adjuntos (PDF y otros)
+  $("#mDocs").innerHTML = (cur.docs || []).map(d =>
+    `<button type="button" class="btn btn--ghost doc" data-doc="${esc(d.id)}" data-name="${esc(d.name)}">📄 ${esc(d.name)}</button>`).join("");
 }
 function closeModal() { $("#modal").hidden = true; document.body.style.overflow = ""; }
 
@@ -218,6 +265,7 @@ function init() {
 
   // Tarjetas → modal
   $("#sections").addEventListener("click", e => { const c = e.target.closest(".card"); if (c) openModal(+c.dataset.i); });
+  $("#modal").addEventListener("click", e => { const d = e.target.closest("[data-doc]"); if (d) openDoc(d.dataset.doc, d); });
   $("#modal").addEventListener("click", e => { if (e.target.hasAttribute("data-close")) closeModal(); const t = e.target.closest("[data-k]"); if (t) showPhoto(+t.dataset.k); });
   $("#gPrev").onclick = () => showPhoto(gi - 1);
   $("#gNext").onclick = () => showPhoto(gi + 1);

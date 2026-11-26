@@ -1,83 +1,82 @@
 /**
  * =========================================================
  * HISTORIAL ESCOLAR 2026 · API en Google Apps Script
- * Lee las respuestas del Google Forms (hoja de cálculo) y las
- * entrega al sitio web en formato JSON. No expone credenciales.
+ * - Entrega al sitio los registros de la hoja de respuestas (JSON).
+ * - Entrega los archivos adjuntos (fotos y PDF) leyéndolos desde Drive
+ *   con el permiso de quien despliega el script. Así se ven aunque la
+ *   escuela (Google Workspace) bloquee compartir archivos "con enlace".
+ * No expone credenciales. Solo sirve archivos que figuran en la hoja.
  * =========================================================
  */
 
 /* ---------- CONFIGURACIÓN ---------- */
 const CONFIG = {
-  // ID de la hoja de respuestas (la parte larga de la URL, entre /d/ y /edit)
   SPREADSHEET_ID: '1UK3SmoYPcaZ7e9WEuQOEWLl_GzOLf2HzygezoTCxxV4',
-  // Pestaña de respuestas, identificada por su gid (el número después de "gid=" en la URL).
-  // Si no se encuentra, se usa la primera pestaña.
-  SHEET_GID: 282001144,
-  // Segundos que se guarda la respuesta en caché (acelera el sitio). Poner 0 para desactivar.
-  CACHE_SECONDS: 120,
-  // Ancho de las imágenes pedidas a Drive (px)
-  IMG_WIDTH: 1400
+  SHEET_GID: 282001144,          // pestaña de respuestas (número después de gid=)
+  CACHE_SECONDS: 120,            // caché de la lista de publicaciones (0 = sin caché)
+  IMG_WIDTH: 1400,               // ancho de miniaturas de Drive
+  MAX_FILE_MB: 25                // tamaño máximo de archivo que se entrega
 };
 
-/* Palabras clave para reconocer cada columna sin depender del texto exacto de la pregunta.
-   Se compara sin tildes y en minúsculas. Se usa la PRIMERA columna que contenga la palabra. */
+/* Palabras clave de los encabezados (sin tildes, minúsculas). */
 const COLUMNS = {
   timestamp: ['marca temporal', 'timestamp'],
   category:  ['categoria', 'tipo de acontecimiento', 'seccion', 'tipo de'],
   title:     ['titulo', 'nombre del', 'acontecimiento'],
   date:      ['fecha'],
   text:      ['resena', 'descripcion', 'relato', 'breve'],
-  images:    ['foto', 'imagen', 'imagenes', 'archivo']
+  files:     ['adjuntar', 'archivo', 'foto', 'imagen']
 };
-
-/* Los grados llegan de una cuadrícula del Forms: una columna por grado
-   ("Grado [1°]", "Grado [2°]"...) cuyo valor son las divisiones marcadas ("A, B, C"). */
+/* Cuadrícula de grados: una columna por grado ("Grado [1°]") con las divisiones marcadas. */
 const GRADE_HEADER = /^grado\s*\[(.+?)\]/;
 
 /* ---------- PUNTO DE ENTRADA WEB ---------- */
-function doGet() {
+function doGet(e) {
   try {
-    const cache = CacheService.getScriptCache();
-    if (CONFIG.CACHE_SECONDS > 0) {
-      const hit = cache.get('events_json');
-      if (hit) return json_(hit);
-    }
-    const out = JSON.stringify({ events: readEvents_(), updated: new Date().toISOString() });
-    // La caché admite hasta ~100 KB; si es mayor simplemente no se guarda.
-    if (CONFIG.CACHE_SECONDS > 0 && out.length < 95000) cache.put('events_json', out, CONFIG.CACHE_SECONDS);
-    return json_(out);
+    const p = (e && e.parameter) || {};
+    if (p.action === 'file') return serveFile_(p.id);
+    return listEvents_();
   } catch (err) {
-    return json_(JSON.stringify({ error: String(err), events: [] }));
+    return json_({ error: String(err), events: [] });
   }
 }
 
-function json_(text) {
-  return ContentService.createTextOutput(text).setMimeType(ContentService.MimeType.JSON);
+function listEvents_() {
+  const cache = CacheService.getScriptCache();
+  if (CONFIG.CACHE_SECONDS > 0) {
+    const hit = cache.get('events_json');
+    if (hit) return ContentService.createTextOutput(hit).setMimeType(ContentService.MimeType.JSON);
+  }
+  const out = JSON.stringify({ events: readEvents_(), updated: new Date().toISOString() });
+  if (CONFIG.CACHE_SECONDS > 0 && out.length < 95000) cache.put('events_json', out, CONFIG.CACHE_SECONDS);
+  return ContentService.createTextOutput(out).setMimeType(ContentService.MimeType.JSON);
+}
+
+function json_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 
 /* ---------- LECTURA DE LA HOJA ---------- */
-function readEvents_() {
+function readSheet_() {
   const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   const sheet = ss.getSheets().filter(function (s) { return s.getSheetId() === CONFIG.SHEET_GID; })[0] || ss.getSheets()[0];
   const values = sheet.getDataRange().getValues();
-  if (values.length < 2) return [];
-
-  const headers = values[0].map(norm_);
+  const headers = (values[0] || []).map(norm_);
   const idx = {};
   Object.keys(COLUMNS).forEach(function (k) { idx[k] = findCol_(headers, COLUMNS[k], idx); });
-  // Columnas de grado: [{col: 2, grade: '1°'}, ...]
   const gradeCols = [];
   headers.forEach(function (h, c) { const m = h.match(GRADE_HEADER); if (m) gradeCols.push({ col: c, grade: m[1].trim() }); });
+  return { values: values, idx: idx, gradeCols: gradeCols };
+}
 
-  const events = [];
-  for (let r = 1; r < values.length; r++) {
-    const row = values[r];
-    const get = function (k) { return idx[k] >= 0 ? row[idx[k]] : ''; };
-    if (row.join('').trim() === '') continue;                 // fila vacía
-
-    const images = parseImages_(get('images'));
+function readEvents_() {
+  const S = readSheet_(), events = [];
+  for (let r = 1; r < S.values.length; r++) {
+    const row = S.values[r];
+    if (row.join('').trim() === '') continue;
+    const get = function (k) { return S.idx[k] >= 0 ? row[S.idx[k]] : ''; };
     const gradeList = [], gradeParts = [];
-    gradeCols.forEach(function (g) {
+    S.gradeCols.forEach(function (g) {
       const v = String(row[g.col] || '').trim();
       if (v) { gradeList.push(g.grade); gradeParts.push(g.grade + ' (' + v + ')'); }
     });
@@ -85,78 +84,83 @@ function readEvents_() {
       id: 'r' + (r + 1),
       category: String(get('category') || '').trim(),
       title: String(get('title') || '').trim() || 'Sin título',
-      grades: gradeParts.join(' · '),     // para mostrar: "1° (A, B) · 3° (C)"
-      gradeList: gradeList,               // para filtrar: ["1°", "3°"]
+      grades: gradeParts.join(' · '),
+      gradeList: gradeList,
       date: toIso_(get('date')),
       timestamp: toIso_(get('timestamp')),
       text: String(get('text') || '').trim(),
-      images: images
+      files: describeFiles_(extractIds_(get('files')))
     });
   }
   return events;
 }
 
-/* Busca la columna cuyo encabezado contiene alguna palabra clave (y que no esté ya usada). */
 function findCol_(headers, keys, used) {
   const taken = Object.keys(used).map(function (k) { return used[k]; });
-  for (let k = 0; k < keys.length; k++) {
-    for (let c = 0; c < headers.length; c++) {
+  for (let k = 0; k < keys.length; k++)
+    for (let c = 0; c < headers.length; c++)
       if (taken.indexOf(c) === -1 && headers[c].indexOf(keys[k]) !== -1) return c;
-    }
-  }
   return -1;
 }
 
-/* ---------- IMÁGENES DE GOOGLE DRIVE ---------- */
-/* Google Forms guarda los enlaces separados por coma: https://drive.google.com/open?id=XXXX
-   Se extrae el ID, se comparte el archivo "con enlace" (lectura) y se devuelve una URL
-   de miniatura que los navegadores pueden mostrar dentro de <img>. */
-function parseImages_(cell) {
-  if (!cell) return [];
+/* ---------- ARCHIVOS ADJUNTOS ---------- */
+/* Google Forms guarda: https://drive.google.com/open?id=XXXX, https://drive.google.com/open?id=YYYY */
+function extractIds_(cell) {
   const ids = [];
-  String(cell).split(/[,\n]+/).forEach(function (part) {
-    const m = part.match(/[-\w]{25,}/);                      // los IDs de Drive tienen 25+ caracteres
+  String(cell || '').split(/[,\n]+/).forEach(function (part) {
+    const m = part.match(/[-\w]{25,}/);
     if (m && ids.indexOf(m[0]) === -1) ids.push(m[0]);
   });
+  return ids;
+}
+
+/* Para cada ID devuelve nombre, tipo (image | pdf | other) y miniatura. */
+function describeFiles_(ids) {
+  const cache = CacheService.getScriptCache();
   return ids.map(function (id) {
-    shareFile_(id);
-    return 'https://drive.google.com/thumbnail?id=' + id + '&sz=w' + CONFIG.IMG_WIDTH;
+    let meta = null;
+    const hit = cache.get('m_' + id);
+    if (hit) meta = JSON.parse(hit);
+    else {
+      try {
+        const f = DriveApp.getFileById(id);
+        const mime = f.getMimeType();
+        meta = { id: id, name: f.getName(), mime: mime,
+                 type: mime.indexOf('image/') === 0 ? 'image' : (mime === 'application/pdf' ? 'pdf' : 'other') };
+        try { f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) { /* política del dominio: se usa el respaldo por el script */ }
+        cache.put('m_' + id, JSON.stringify(meta), 21600);
+      } catch (e) { meta = { id: id, name: 'Archivo no disponible', mime: '', type: 'missing' }; }
+    }
+    if (meta.type === 'image') meta.thumb = 'https://drive.google.com/thumbnail?id=' + id + '&sz=w' + CONFIG.IMG_WIDTH;
+    return meta;
   });
 }
 
-function shareFile_(id) {
-  try {
-    const f = DriveApp.getFileById(id);
-    if (f.getSharingAccess() !== DriveApp.Access.ANYONE_WITH_LINK && f.getSharingAccess() !== DriveApp.Access.ANYONE) {
-      f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    }
-  } catch (e) { /* sin permisos o archivo borrado: la imagen simplemente no se verá */ }
+/* Entrega un archivo en base64 (solo si su ID figura en la hoja). */
+function serveFile_(id) {
+  const S = readSheet_(), allowed = [];
+  for (let r = 1; r < S.values.length; r++) extractIds_(S.idx.files >= 0 ? S.values[r][S.idx.files] : '').forEach(function (x) { allowed.push(x); });
+  if (!id || allowed.indexOf(id) === -1) return json_({ error: 'Archivo no autorizado' });
+  const f = DriveApp.getFileById(id);
+  if (f.getSize() > CONFIG.MAX_FILE_MB * 1048576) return json_({ error: 'Archivo demasiado grande' });
+  const b = f.getBlob();
+  return json_({ name: f.getName(), mime: b.getContentType(), data: Utilities.base64Encode(b.getBytes()) });
 }
 
 /* ---------- UTILIDADES ---------- */
-function norm_(t) {
-  return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-}
+function norm_(t) { return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); }
 function toIso_(v) {
   if (!v) return '';
   if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss");
   const s = String(v).trim();
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);       // dd/mm/aaaa
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   return m ? m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2) : s;
 }
 
-/* ---------- HERRAMIENTAS PARA EL ADMINISTRADOR (se ejecutan a mano) ---------- */
-
-/** Ejecutar UNA vez: autoriza permisos y muestra en el registro lo que el sitio recibirá. */
+/* ---------- PARA EL ADMINISTRADOR (ejecutar a mano) ---------- */
+/** Ejecutar UNA vez: autoriza Hojas + Drive y muestra qué recibirá el sitio. */
 function probar() {
   const ev = readEvents_();
-  Logger.log('Registros leídos: ' + ev.length);
+  Logger.log('Registros: ' + ev.length);
   Logger.log(JSON.stringify(ev.slice(0, 3), null, 2));
-}
-
-/** Opcional: hace públicas (solo lectura) todas las fotos de una carpeta de Drive. */
-function compartirCarpeta() {
-  const FOLDER_ID = 'PEGAR_ID_DE_LA_CARPETA';
-  const files = DriveApp.getFolderById(FOLDER_ID).getFiles();
-  while (files.hasNext()) files.next().setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 }
