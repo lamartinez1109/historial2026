@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Historial Escolar 2026 · Escuela N°1-109 Juan Martínez de Rosas</title>
+  <meta name="description" content="Memoria digital del ciclo lectivo 2026 de la Escuela N°1-109 Juan Martínez de Rosas.">
+  <link rel="icon" href="logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ============ MENÚ FIJO ============ -->
+<header class="nav" id="nav">
+  <a class="nav__brand" href="#inicio" aria-label="Ir al inicio"><img src="logo.png" alt="" width="36" height="36"><span>Historial 2026</span></a>
+  <button class="nav__toggle" id="navToggle" aria-expanded="false" aria-controls="navMenu" aria-label="Abrir menú"><span></span><span></span><span></span></button>
+  <nav class="nav__menu" id="navMenu" aria-label="Secciones">
+    <a href="#inicio">Inicio</a>
+    <a href="#actos">Actos escolares</a>
+    <a href="#proyectos">Proyectos institucionales</a>
+    <a href="#ferias">Ferias de ciencias</a>
+    <a href="#salidas">Salidas educativas</a>
+    <a href="#actividades">Deportes, cultura y recreación</a>
+    <a href="#encuentros">Encuentros y programas</a>
+    <a href="#distinciones">Distinciones</a>
+  </nav>
+</header>
+
+<!-- ============ PORTADA ============ -->
+<section class="hero" id="inicio">
+  <div class="hero__bg" id="heroBg"></div>
+  <div class="hero__inner">
+    <img class="hero__logo" src="logo.png" alt="Escudo de la Escuela N°1-109 Juan Martínez de Rosas" width="170" height="170">
+    <p class="hero__school">Escuela N°1-109 “Juan Martínez de Rosas”</p>
+    <h1 class="hero__title">Historial Escolar <span>2026</span></h1>
+    <p class="hero__quote">Cada experiencia deja una huella, cada encuentro construye nuestra historia.</p>
+    <a class="btn" href="#actos">Recorrer el año</a>
+  </div>
+  <svg class="hero__ribbon" viewBox="0 0 1200 60" preserveAspectRatio="none" aria-hidden="true"><path d="M0 60V30Q300 0 600 24T1200 20V60Z"/></svg>
+</section>
+
+<!-- ============ BUSCADOR Y FILTROS ============ -->
+<div class="tools" id="tools">
+  <div class="tools__row">
+    <label class="field field--grow"><span>Buscar por título</span>
+      <input type="search" id="fSearch" placeholder="Ej.: acto 25 de Mayo"></label>
+    <label class="field"><span>Categoría</span><select id="fCat"></select></label>
+    <label class="field"><span>Grado</span><select id="fGrade"></select></label>
+    <label class="field"><span>Orden</span>
+      <select id="fOrder"><option value="desc">Más recientes primero</option><option value="asc">Cronológico (del inicio al fin)</option></select></label>
+    <button class="btn btn--ghost" id="fReset" type="button">Limpiar</button>
+  </div>
+  <p class="tools__count" id="count" aria-live="polite"></p>
+</div>
+
+<!-- Estado de carga / error -->
+<div class="status" id="status" role="status"></div>
+
+<!-- ============ SECCIONES (se rellenan desde script.js) ============ -->
+<main id="sections"></main>
+
+<!-- ============ PIE ============ -->
+<footer class="footer">
+  <img src="logo.png" alt="Escudo de la escuela" width="96" height="96">
+  <p class="footer__name">Escuela N°1-109 “Juan Martínez de Rosas”</p>
+  <p class="footer__quote">Construimos nuestra historia a través de cada experiencia compartida.</p>
+  <p class="footer__meta">Ciclo lectivo 2026 · Historial 2026</p>
+</footer>
+
+<button class="totop" id="toTop" aria-label="Volver al inicio" hidden>↑</button>
+
+<!-- ============ VISTA AMPLIADA ============ -->
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="mTitle">
+  <div class="modal__backdrop" data-close></div>
+  <article class="modal__panel">
+    <button class="modal__close" data-close aria-label="Cerrar">×</button>
+    <div class="gallery">
+      <img id="mImg" alt="">
+      <button class="gallery__nav gallery__nav--prev" id="gPrev" aria-label="Foto anterior">‹</button>
+      <button class="gallery__nav gallery__nav--next" id="gNext" aria-label="Foto siguiente">›</button>
+      <div class="gallery__thumbs" id="gThumbs"></div>
+    </div>
+    <div class="modal__body">
+      <p class="chip" id="mCat"></p>
+      <h2 id="mTitle"></h2>
+      <p class="meta" id="mMeta"></p>
+      <p class="modal__text" id="mText"></p>
+    </div>
+  </article>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
