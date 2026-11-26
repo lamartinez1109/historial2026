@@ -25,11 +25,14 @@ const COLUMNS = {
   timestamp: ['marca temporal', 'timestamp'],
   category:  ['categoria', 'tipo de acontecimiento', 'seccion', 'tipo de'],
   title:     ['titulo', 'nombre del', 'acontecimiento'],
-  grades:    ['grado', 'curso', 'seccion/grado'],
   date:      ['fecha'],
   text:      ['resena', 'descripcion', 'relato', 'breve'],
   images:    ['foto', 'imagen', 'imagenes', 'archivo']
 };
+
+/* Los grados llegan de una cuadrícula del Forms: una columna por grado
+   ("Grado [1°]", "Grado [2°]"...) cuyo valor son las divisiones marcadas ("A, B, C"). */
+const GRADE_HEADER = /^grado\s*\[(.+?)\]/;
 
 /* ---------- PUNTO DE ENTRADA WEB ---------- */
 function doGet() {
@@ -62,6 +65,9 @@ function readEvents_() {
   const headers = values[0].map(norm_);
   const idx = {};
   Object.keys(COLUMNS).forEach(function (k) { idx[k] = findCol_(headers, COLUMNS[k], idx); });
+  // Columnas de grado: [{col: 2, grade: '1°'}, ...]
+  const gradeCols = [];
+  headers.forEach(function (h, c) { const m = h.match(GRADE_HEADER); if (m) gradeCols.push({ col: c, grade: m[1].trim() }); });
 
   const events = [];
   for (let r = 1; r < values.length; r++) {
@@ -70,11 +76,17 @@ function readEvents_() {
     if (row.join('').trim() === '') continue;                 // fila vacía
 
     const images = parseImages_(get('images'));
+    const gradeList = [], gradeParts = [];
+    gradeCols.forEach(function (g) {
+      const v = String(row[g.col] || '').trim();
+      if (v) { gradeList.push(g.grade); gradeParts.push(g.grade + ' (' + v + ')'); }
+    });
     events.push({
       id: 'r' + (r + 1),
       category: String(get('category') || '').trim(),
       title: String(get('title') || '').trim() || 'Sin título',
-      grades: String(get('grades') || '').trim(),
+      grades: gradeParts.join(' · '),     // para mostrar: "1° (A, B) · 3° (C)"
+      gradeList: gradeList,               // para filtrar: ["1°", "3°"]
       date: toIso_(get('date')),
       timestamp: toIso_(get('timestamp')),
       text: String(get('text') || '').trim(),

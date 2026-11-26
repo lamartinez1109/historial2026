@@ -4,13 +4,13 @@ Contenido: `index.html`, `styles.css`, `script.js`, `Code.gs`, `logo.png`.
 Sin configurar nada, el sitio abre en **modo demostración** (contenido marcado "[DEMO]").
 
 ## 1. Preparar el Google Forms
-Preguntas recomendadas (el sistema reconoce las columnas por palabras del encabezado):
+Tu formulario actual ya funciona con estos encabezados: *Título descriptivo, Fecha de la actividad, Categoría de la actividad, Breve descripción, Adjuntar archivos* y las columnas *Grado [1°]…[7°]*. Referencia (el sistema reconoce las columnas por palabras del encabezado):
 
 | Pregunta | Tipo | Palabra clave en el título |
 |---|---|---|
 | Categoría | Desplegable | "Categoría" |
 | Título del acontecimiento | Respuesta corta | "Título" |
-| Grado/s participante/s | Respuesta corta | "Grado" |
+| Grado/s participante/s | Cuadrícula de casillas (filas: 1° a 7°; columnas: A, B, C, D) | "Grado [1°]", "Grado [2°]"… (ya configurado) |
 | Fecha del evento | Fecha | "Fecha" |
 | Reseña | Párrafo | "Reseña" o "Descripción" |
 | Fotografías | Carga de archivos (varias) | "Foto" |

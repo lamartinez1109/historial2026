@@ -42,6 +42,9 @@ function categoryOf(raw) {
   return hit ? hit.id : null;
 }
 /** Separa "3° A, 4° B y 5°" en ["3° A","4° B","5°"]. */
+function gradesOf(e) {
+  return Array.isArray(e.gradeList) ? e.gradeList : splitGrades(e.grades);
+}
 function splitGrades(g) {
   return String(g || "").split(/[,;\/\n]|\sy\s/i).map(s => s.trim()).filter(Boolean);
 }
@@ -118,7 +121,7 @@ function buildSections() {
 }
 function buildGradeFilter() {
   const set = new Set();
-  EVENTS.forEach(e => splitGrades(e.grades).forEach(g => set.add(g)));
+  EVENTS.forEach(e => gradesOf(e).forEach(g => set.add(g)));
   const list = [...set].sort((a, b) => a.localeCompare(b, "es", { numeric: true }));
   $("#fGrade").innerHTML = '<option value="">Todos los grados</option>' + list.map(g => `<option>${esc(g)}</option>`).join("");
 }
@@ -126,7 +129,7 @@ function filtered() {
   const q = norm(F.q);
   return EVENTS.filter(e =>
     (!q || norm(e.title).includes(q)) &&
-    (!F.grade || splitGrades(e.grades).includes(F.grade))
+    (!F.grade || gradesOf(e).includes(F.grade))
   ).sort((a, b) => {
     // Sin fecha → siempre al final
     if (!ts(a) && !ts(b)) return 0; if (!ts(a)) return 1; if (!ts(b)) return -1;
