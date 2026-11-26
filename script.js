@@ -6,7 +6,7 @@
 const CONFIG = {
   // Pegar aquí la URL de la "aplicación web" de Apps Script (termina en /exec).
   // Mientras esté vacía, el sitio muestra DATOS DE DEMOSTRACIÓN.
-  API_URL: "",
+  API_URL: "https://script.google.com/macros/s/AKfycbyIlmdPKgx-R7xz_Y2SS-46sNINQUYnrXiblkairsrDvsk1WdR5X0RYook1VA1qoWg7cQ/exec",
   // Imagen de fondo de la portada (opcional). Ej.: "fondo.jpg". Vacío = fondo institucional.
   HERO_IMAGE: ""
 };
