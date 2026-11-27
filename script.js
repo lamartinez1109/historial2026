@@ -6,7 +6,7 @@
 const CONFIG = {
   // Pegar aquí la URL de la "aplicación web" de Apps Script (termina en /exec).
   // Mientras esté vacía, el sitio muestra DATOS DE DEMOSTRACIÓN.
-  API_URL: "https://script.google.com/macros/s/AKfycbwI0oFBNqfgQR5HjyThyHvX_vwXQxQsuaXT586GGDoni9RUXK6EkxXa-fynNJ-ZOjOwDw/exec",
+  API_URL: "",
   // Imagen de fondo de la portada (opcional). Ej.: "fondo.jpg". Vacío = fondo institucional.
   HERO_IMAGE: ""
 };
@@ -18,8 +18,8 @@ const CATEGORIES = [
     desc:"Actos patrios, conmemoraciones, celebraciones y fechas significativas." },
   { id:"proyectos",   name:"Proyectos institucionales", icon:"📚", color:"#3f9a39", keys:["proyecto"],
     desc:"Experiencias pedagógicas y propuestas de enseñanza de los distintos grados." },
-  { id:"ferias",      name:"Ferias de ciencias", icon:"🔬", color:"#2a7fb8", keys:["feria","ciencia"],
-    desc:"Investigaciones, experiencias científicas, producciones y exposiciones." },
+  { id:"jornadas",    name:"Jornadas de reflexión", icon:"💭", color:"#2a7fb8", keys:["jornada","reflexion"],
+    desc:"Espacios de diálogo, análisis y reflexión de la comunidad educativa." },
   { id:"salidas",     name:"Salidas educativas", icon:"🚌", color:"#e08a1e", keys:["salida","excursion","visita"],
     desc:"Visitas didácticas, recorridos y experiencias fuera de la institución." },
   { id:"actividades", name:"Actividades deportivas, culturales y recreativas", icon:"⚽", color:"#8b4fb8", keys:["deport","cultural","recreativ","muestra"],
@@ -84,7 +84,7 @@ function demoData() {
   return [
     mk(1,"Actos escolares","[DEMO] Acto de ejemplo","Todos los grados","2026-05-25","Texto de demostración. Aquí se mostrará la reseña completa que el docente cargue en el formulario.",3),
     mk(2,"Proyectos institucionales","[DEMO] Proyecto de ejemplo","4° y 5° grado","2026-04-10","Texto de demostración de un proyecto institucional.",2),
-    mk(3,"Ferias de ciencias","[DEMO] Feria de ejemplo","6° grado","2026-09-18","Texto de demostración de una feria de ciencias.",1),
+    mk(3,"Jornadas de reflexión","[DEMO] Jornada de ejemplo","6° grado","2026-09-18","Texto de demostración de una jornada de reflexión.",1),
     mk(4,"Salidas educativas","[DEMO] Salida de ejemplo","1° y 2° grado","2026-06-02","Texto de demostración de una salida educativa.",2),
     mk(5,"Actividades deportivas, culturales y recreativas","[DEMO] Muestra de ejemplo","3° grado","2026-10-05","Texto de demostración de una actividad.",1),
     mk(6,"Participación en encuentros","[DEMO] Encuentro de ejemplo","7° grado","",  "Registro sin fecha: se ubica al final del orden cronológico.",0)

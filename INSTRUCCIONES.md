@@ -15,7 +15,7 @@ Tu formulario actual ya funciona con estos encabezados: *Título descriptivo, Fe
 | Reseña | Párrafo | "Reseña" o "Descripción" |
 | Fotografías | Carga de archivos (varias) | "Foto" |
 
-Opciones de **Categoría** (deben contener estas palabras): Actos escolares · Proyectos institucionales · Ferias de ciencias · Salidas educativas · Actividades deportivas, culturales y recreativas · Participación en encuentros/programas educativos · Distinciones.
+Opciones de **Categoría** (deben contener estas palabras): Actos escolares · Proyectos institucionales · Jornadas de reflexión · Salidas educativas · Actividades deportivas, culturales y recreativas · Participación en encuentros/programas educativos · Distinciones.
 
 Importante: las **fotos subidas al Forms quedan en el Drive del dueño del formulario**; quien creó el Forms debe ser quien despliegue el script (paso 2).
 
