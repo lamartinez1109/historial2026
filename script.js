@@ -6,7 +6,7 @@
 const CONFIG = {
   // Pegar aquí la URL de la "aplicación web" de Apps Script (termina en /exec).
   // Mientras esté vacía, el sitio muestra DATOS DE DEMOSTRACIÓN.
-  API_URL: "https://script.google.com/macros/s/AKfycbwI0oFBNqfgQR5HjyThyHvX_vwXQxQsuaXT586GGDoni9RUXK6EkxXa-fynNJ-ZOjOwDw/exec",
+  API_URL: "",
   // Imagen de fondo de la portada (opcional). Ej.: "fondo.jpg". Vacío = fondo institucional.
   HERO_IMAGE: ""
 };
@@ -33,8 +33,24 @@ const CATEGORIES = [
 /* ---------- 2. UTILIDADES ---------- */
 const $ = (s, el = document) => el.querySelector(s);
 const norm = t => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+const W_CARD = 600, W_FULL = 1400, W_THUMB = 160;          // anchos (px) pedidos a Drive según el uso
+const sized = (url, w) => String(url || "").replace(/sz=w\d+/, "sz=w" + w);
 const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 
+/** Convierte en enlaces clicables las direcciones http(s):// o www. de un texto.
+    El resto del texto se escapa, así que es seguro usarlo con innerHTML. */
+function linkify(text) {
+  const re = /(?:https?:\/\/|www\.)[^\s<>"']*[^\s<>"'.,;:!?)\]]/gi;   // excluye puntuación final
+  text = String(text || "");
+  let out = "", last = 0, m;
+  while ((m = re.exec(text))) {
+    const url = m[0], href = /^www\./i.test(url) ? "https://" + url : url;
+    out += esc(text.slice(last, m.index)) +
+      `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a>`;
+    last = m.index + url.length;
+  }
+  return out + esc(text.slice(last));
+}
 /** Asigna un id de categoría a partir del texto libre del formulario. */
 function categoryOf(raw) {
   const t = norm(raw);
@@ -80,33 +96,43 @@ let EVENTS = [];
 const F = { q:"", cat:"", grade:"", order:"asc" };   // asc = cronológico (del más antiguo al más reciente)
 
 /* ---------- 5. CARGA DE DATOS ---------- */
+const CACHE_KEY = "historial2026:v1";
+const mapEvents = json => (json.events || []).map(e => ({
+  ...e,
+  imgs: (e.files || []).filter(f => f.type === "image").map(f => ({ id: f.id, url: f.thumb, proxy: !!f.proxy })),
+  docs: (e.files || []).filter(f => f.type !== "image" && f.type !== "missing")
+}));
 async function loadData() {
   const st = $("#status");
   st.className = "status";
-  st.innerHTML = '<div class="spinner"></div>Cargando publicaciones…';
+  let shownCached = null;
   try {
-    if (!CONFIG.API_URL) { EVENTS = demoData().map(e => ({ ...e, imgs: e.images.map(u => ({ url: u })), docs: [] })); }
-    else {
-      const res = await fetch(CONFIG.API_URL);
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const json = await res.json();
-      if (json.error) throw new Error(json.error);
-      EVENTS = (json.events || []).map(e => ({
-        ...e,
-        imgs: (e.files || []).filter(f => f.type === "image").map(f => ({ id: f.id, url: f.thumb, proxy: !!f.proxy })),
-        docs: (e.files || []).filter(f => f.type !== "image" && f.type !== "missing")
-      }));
+    if (!CONFIG.API_URL) {
+      EVENTS = demoData().map(e => ({ ...e, imgs: e.images.map(u => ({ url: u })), docs: [] }));
+      st.innerHTML = '<div class="demo-flag">Modo demostración: contenido de ejemplo. Configurá API_URL en script.js.</div>';
+      return render();
     }
+    // 1) Si ya se visitó antes, se muestra al instante lo último guardado en este dispositivo
+    try { shownCached = localStorage.getItem(CACHE_KEY); } catch (e) {}
+    if (shownCached) { EVENTS = mapEvents(JSON.parse(shownCached)); st.innerHTML = ""; render(); }
+    else st.innerHTML = '<div class="spinner"></div>Cargando publicaciones…';
+    // 2) Se consulta la versión actual y se redibuja solo si hubo cambios
+    const res = await fetch(CONFIG.API_URL);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const text = await res.text();
+    const json = JSON.parse(text);
+    if (json.error) throw new Error(json.error);
+    try { localStorage.setItem(CACHE_KEY, text); } catch (e) {}
     st.innerHTML = "";
-    if (!CONFIG.API_URL) st.innerHTML = '<div class="demo-flag">Modo demostración: contenido de ejemplo. Configurá API_URL en script.js.</div>';
-    render();
+    if (text !== shownCached) { EVENTS = mapEvents(json); render(); }
   } catch (err) {
     console.error(err);
+    if (shownCached) return;                       // ya hay contenido visible: no se muestra error
     st.className = "status status--error";
     st.innerHTML = "No se pudieron obtener las publicaciones. Revisá tu conexión y volvé a intentar. " +
       '<br><button class="btn btn--ghost" id="retry" type="button">Reintentar</button>';
     $("#retry").onclick = loadData;
-    render(); // dibuja las secciones vacías
+    render();
   }
 }
 
@@ -137,7 +163,7 @@ function filtered() {
 function cardHTML(e, idx) {
   const first = (e.imgs || [])[0];
   const img = first
-    ? `<img src="${first.proxy ? BLANK : esc(first.url)}" ${first.proxy ? "data-proxy" : ""} data-fid="${esc(first.id || "")}" alt="${esc(e.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="imgFallback(this)">`
+    ? `<img src="${first.proxy ? BLANK : esc(sized(first.url, W_CARD))}" data-w="${W_CARD}" ${first.proxy ? "data-proxy" : ""} data-fid="${esc(first.id || "")}" alt="${esc(e.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="imgFallback(this)">`
     : `<div class="noimg">${(e.docs || []).length ? "📄" : "📷"}</div>`;
   const n = (e.imgs || []).length;
   const cat = CATEGORIES.find(c => c.id === e._cat);
@@ -194,10 +220,19 @@ function loadHeicLib() {
     document.head.appendChild(sc);
   }));
 }
-async function fetchBlobUrl(id) {
-  if (blobCache[id]) return blobCache[id];
-  blobCache[id] = (async () => {
-    const res = await fetch(CONFIG.API_URL + (CONFIG.API_URL.includes("?") ? "&" : "?") + "action=file&w=1400&id=" + encodeURIComponent(id));
+/* Cola: máximo 3 pedidos simultáneos al script (evita saturarlo y acelera los primeros). */
+let active = 0; const waiting = [];
+function limited(fn) {
+  return new Promise((ok, fail) => {
+    const run = () => { active++; fn().then(ok, fail).finally(() => { active--; if (waiting.length) waiting.shift()(); }); };
+    active < 3 ? run() : waiting.push(run);
+  });
+}
+async function fetchBlobUrl(id, w = W_FULL) {
+  const key = id + ":" + w;
+  if (blobCache[key]) return blobCache[key];
+  blobCache[key] = limited(async () => {
+    const res = await fetch(CONFIG.API_URL + (CONFIG.API_URL.includes("?") ? "&" : "?") + "action=file&w=" + w + "&id=" + encodeURIComponent(id));
     const j = await res.json();
     if (j.error) throw new Error(j.error);
     const bin = atob(j.data), bytes = new Uint8Array(bin.length);
@@ -208,14 +243,14 @@ async function fetchBlobUrl(id) {
       blob = Array.isArray(conv) ? conv[0] : conv;
     }
     return URL.createObjectURL(blob);
-  })();
-  try { return await blobCache[id]; } catch (e) { delete blobCache[id]; throw e; }
+  });
+  try { return await blobCache[key]; } catch (e) { delete blobCache[key]; throw e; }
 }
 window.imgFallback = function (img) {
   const id = img.dataset.fid;
   if (!id || img.dataset.tried || !CONFIG.API_URL) { return showNoImg(img); }
   img.dataset.tried = "1";
-  fetchBlobUrl(id).then(u => { img.src = u; }).catch(() => showNoImg(img));
+  fetchBlobUrl(id, +img.dataset.w || W_FULL).then(u => { img.src = u; }).catch(() => showNoImg(img));
 };
 function showNoImg(img) {
   if (img.closest(".card__img")) img.replaceWith(Object.assign(document.createElement("div"), { className: "noimg", textContent: "📷" }));
@@ -224,7 +259,7 @@ function showNoImg(img) {
 async function openDoc(id, btn) {
   const w = window.open("", "_blank");            // se abre ya, para evitar el bloqueo de ventanas
   const old = btn.textContent; btn.textContent = "Cargando…"; btn.disabled = true;
-  try { const u = await fetchBlobUrl(id); w ? (w.location = u) : (location.href = u); }
+  try { const u = await fetchBlobUrl(id, 0); w ? (w.location = u) : (location.href = u); }
   catch (e) { if (w) w.close(); alert("No se pudo abrir el documento. Intentá de nuevo."); }
   btn.textContent = old; btn.disabled = false;
 }
@@ -237,7 +272,7 @@ function openModal(i) {
   $("#mCat").textContent = cat ? cat.name : "Otros";
   $("#mTitle").textContent = cur.title || "Sin título";
   $("#mMeta").textContent = [cur.grades && "Grado/s: " + cur.grades, fmtDate(cur.date)].filter(Boolean).join(" · ");
-  $("#mText").textContent = cur.text || "Sin reseña.";
+  $("#mText").innerHTML = linkify(cur.text) || "Sin reseña.";
   showPhoto(0);
   $("#modal").hidden = false;
   document.body.style.overflow = "hidden";
@@ -251,13 +286,13 @@ function showPhoto(n) {
   if (imgs.length) {
     const it = imgs[gi];
     mImg.onerror = () => imgFallback(mImg);
-    mImg.dataset.fid = it.id || ""; mImg.dataset.tried = "";
+    mImg.dataset.fid = it.id || ""; mImg.dataset.tried = ""; mImg.dataset.w = W_FULL;
     mImg.alt = cur.title;
-    if (it.proxy) { mImg.src = BLANK; imgFallback(mImg); } else mImg.src = it.url;
+    if (it.proxy) { mImg.src = BLANK; imgFallback(mImg); } else mImg.src = sized(it.url, W_FULL);
   }
   $("#gPrev").hidden = $("#gNext").hidden = imgs.length < 2;
   $("#gThumbs").innerHTML = imgs.length < 2 ? "" : imgs.map((it, k) =>
-    `<button type="button" data-k="${k}" class="${k === gi ? "is-on" : ""}" aria-label="Foto ${k + 1}"><img src="${it.proxy ? BLANK : esc(it.url)}" ${it.proxy ? "data-proxy" : ""} data-fid="${esc(it.id || "")}" alt="" referrerpolicy="no-referrer" onerror="imgFallback(this)"></button>`).join("");
+    `<button type="button" data-k="${k}" class="${k === gi ? "is-on" : ""}" aria-label="Foto ${k + 1}"><img src="${it.proxy ? BLANK : esc(sized(it.url, W_THUMB))}" data-w="${W_THUMB}" ${it.proxy ? "data-proxy" : ""} data-fid="${esc(it.id || "")}" alt="" referrerpolicy="no-referrer" onerror="imgFallback(this)"></button>`).join("");
   $("#gThumbs").querySelectorAll("img[data-proxy]").forEach(imgFallback);
   // Documentos adjuntos (PDF y otros)
   $("#mDocs").innerHTML = (cur.docs || []).map(d =>

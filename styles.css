@@ -95,7 +95,7 @@ img{max-width:100%;display:block}
 /* ---------- Tarjetas ---------- */
 .card{background:var(--card);border-radius:var(--r);overflow:hidden;border:1px solid var(--line);cursor:pointer;display:flex;flex-direction:column;text-align:left;font:inherit;color:inherit;padding:0;transition:transform .25s,box-shadow .25s}
 .card:hover{transform:translateY(-4px);box-shadow:0 14px 30px rgba(20,22,31,.14)}
-.card__img{aspect-ratio:4/3;background:var(--ink-2);position:relative;overflow:hidden}
+.card__img{aspect-ratio:4/3;background:linear-gradient(100deg,#dfe5da 30%,#eef2ea 50%,#dfe5da 70%) 0 0/200% 100%;animation:shimmer 1.4s linear infinite;position:relative;overflow:hidden}
 .card__img img{width:100%;height:100%;object-fit:cover}
 .card__img .noimg{display:grid;place-items:center;height:100%;font-size:2.6rem;color:var(--gold)}
 .card__count{position:absolute;right:.6rem;bottom:.6rem;background:rgba(20,22,31,.8);color:#fff;font:600 .9rem var(--f-head);padding:.1rem .6rem;border-radius:99px}
@@ -143,3 +143,7 @@ img{max-width:100%;display:block}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}.reveal{opacity:1;transform:none}}
 
 .docs{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.6rem}.docs:empty{display:none}.doc{text-align:left;font-size:.95rem}
+
+@keyframes shimmer{to{background-position:-200% 0}}
+
+.modal__text a{color:#1a5fb4;font-weight:600;text-decoration:underline;word-break:break-word}.modal__text a:hover{color:var(--red)}
