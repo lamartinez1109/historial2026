@@ -42,22 +42,6 @@
   <svg class="hero__ribbon" viewBox="0 0 1200 60" preserveAspectRatio="none" aria-hidden="true"><path d="M0 60V30Q300 0 600 24T1200 20V60Z"/></svg>
 </section>
 
-<!-- ============ BUSCADOR Y FILTROS ============ -->
-<div class="tools" id="tools">
-  <div class="tools__row">
-    <label class="field field--grow"><span>Buscar por título</span>
-      <input type="search" id="fSearch" placeholder="Ej.: acto 25 de Mayo"></label>
-    <label class="field"><span>Categoría</span><select id="fCat"></select></label>
-    <label class="field"><span>Grado</span><select id="fGrade"></select></label>
-    <label class="field"><span>Orden</span>
-      <select id="fOrder"><option value="asc">Cronológico (del más antiguo al más reciente)</option><option value="desc">Más recientes primero</option></select></label>
-    <button class="btn btn--ghost" id="fReset" type="button">Limpiar</button>
-  </div>
-  <p class="tools__count" id="count" aria-live="polite"></p>
-</div>
-
-<!-- Estado de carga / error -->
-<div class="status" id="status" role="status"></div>
 
 <!-- ============ SECCIONES (se rellenan desde script.js) ============ -->
 <main id="sections"></main>
