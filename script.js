@@ -6,7 +6,7 @@
 const CONFIG = {
   // Pegar aquí la URL de la "aplicación web" de Apps Script (termina en /exec).
   // Mientras esté vacía, el sitio muestra DATOS DE DEMOSTRACIÓN.
-  API_URL: "https://script.google.com/macros/s/AKfycbzK3TsWcdjr8opDKnqncz8SQCOLSwxb-f5Mx9YHaVlcESRTwz3yvi--gcKITvvspB2r2g/exec",
+  API_URL: "",
   // Imagen de fondo de la portada (opcional). Ej.: "fondo.jpg". Vacío = fondo institucional.
   HERO_IMAGE: ""
 };
@@ -77,7 +77,7 @@ function demoData() {
 
 /* ---------- 4. ESTADO ---------- */
 let EVENTS = [];
-const F = { q:"", cat:"", grade:"", order:"desc" };
+const F = { q:"", cat:"", grade:"", order:"asc" };   // asc = cronológico (del más antiguo al más reciente)
 
 /* ---------- 5. CARGA DE DATOS ---------- */
 async function loadData() {
@@ -137,7 +137,10 @@ function filtered() {
   ).sort((a, b) => {
     // Sin fecha → siempre al final
     if (!ts(a) && !ts(b)) return 0; if (!ts(a)) return 1; if (!ts(b)) return -1;
-    return F.order === "asc" ? ts(a) - ts(b) : ts(b) - ts(a);
+    // Misma fecha del evento → desempata por el momento en que se cargó el formulario
+    const tie = (new Date(a.timestamp) || 0) - (new Date(b.timestamp) || 0);
+    const d = ts(a) - ts(b) || tie || 0;
+    return F.order === "asc" ? d : -d;
   });
 }
 function cardHTML(e, idx) {
@@ -282,8 +285,8 @@ function init() {
   $("#fCat").onchange   = e => { F.cat = e.target.value; render(); };
   $("#fGrade").onchange = e => { F.grade = e.target.value; render(); };
   $("#fOrder").onchange = e => { F.order = e.target.value; render(); };
-  $("#fReset").onclick  = () => { Object.assign(F, { q:"", cat:"", grade:"", order:"desc" });
-    ["fSearch","fCat","fGrade"].forEach(id => $("#" + id).value = ""); $("#fOrder").value = "desc"; render(); };
+  $("#fReset").onclick  = () => { Object.assign(F, { q:"", cat:"", grade:"", order:"asc" });
+    ["fSearch","fCat","fGrade"].forEach(id => $("#" + id).value = ""); $("#fOrder").value = "asc"; render(); };
 
   // Tarjetas → modal
   $("#sections").addEventListener("click", e => { const c = e.target.closest(".card"); if (c) openModal(+c.dataset.i); });
