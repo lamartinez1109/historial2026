@@ -34,7 +34,7 @@ const GRADE_HEADER = /^grado\s*\[(.+?)\]/;
 function doGet(e) {
   try {
     const p = (e && e.parameter) || {};
-    if (p.action === 'file') return serveFile_(p.id);
+    if (p.action === 'file') return serveFile_(p.id, p.w);
     return listEvents_();
   } catch (err) {
     return json_({ error: String(err), events: [] });
@@ -131,20 +131,41 @@ function describeFiles_(ids) {
         cache.put('m_' + id, JSON.stringify(meta), 21600);
       } catch (e) { meta = { id: id, name: 'Archivo no disponible', mime: '', type: 'missing' }; }
     }
-    if (meta.type === 'image') meta.thumb = 'https://drive.google.com/thumbnail?id=' + id + '&sz=w' + CONFIG.IMG_WIDTH;
+    if (meta.type === 'image') {
+      // HEIC/HEIF (fotos de iPhone) no se muestran en la mayoría de navegadores:
+      // se marcan "proxy" para que el sitio las pida convertidas a JPEG por el script.
+      meta.proxy = /hei[cf]/i.test(meta.mime) || /\.hei[cf]$/i.test(meta.name);
+      if (!meta.proxy) meta.thumb = 'https://drive.google.com/thumbnail?id=' + id + '&sz=w' + CONFIG.IMG_WIDTH;
+    }
     return meta;
   });
 }
 
 /* Entrega un archivo en base64 (solo si su ID figura en la hoja). */
-function serveFile_(id) {
+function serveFile_(id, width) {
   const S = readSheet_(), allowed = [];
   for (let r = 1; r < S.values.length; r++) extractIds_(S.idx.files >= 0 ? S.values[r][S.idx.files] : '').forEach(function (x) { allowed.push(x); });
   if (!id || allowed.indexOf(id) === -1) return json_({ error: 'Archivo no autorizado' });
   const f = DriveApp.getFileById(id);
+  // Imágenes: se pide a Drive una versión JPEG redimensionada (convierte HEIC y pesa menos).
+  if (f.getMimeType().indexOf('image/') === 0) {
+    const jpg = thumbnailJpeg_(id, Math.min(parseInt(width, 10) || CONFIG.IMG_WIDTH, 2000));
+    if (jpg) return json_({ name: f.getName().replace(/\.[^.]+$/, '') + '.jpg', mime: 'image/jpeg', data: Utilities.base64Encode(jpg) });
+  }
   if (f.getSize() > CONFIG.MAX_FILE_MB * 1048576) return json_({ error: 'Archivo demasiado grande' });
   const b = f.getBlob();
   return json_({ name: f.getName(), mime: b.getContentType(), data: Utilities.base64Encode(b.getBytes()) });
+}
+
+/* Miniatura JPEG generada por Drive, pedida con la autorización del dueño del script. */
+function thumbnailJpeg_(id, w) {
+  try {
+    const r = UrlFetchApp.fetch('https://drive.google.com/thumbnail?id=' + id + '&sz=w' + w, {
+      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true, followRedirects: true });
+    const type = String(r.getHeaders()['Content-Type'] || r.getHeaders()['content-type'] || '');
+    if (r.getResponseCode() === 200 && type.indexOf('image/') === 0) return r.getContent();
+  } catch (e) { /* se usa el archivo original */ }
+  return null;
 }
 
 /* ---------- UTILIDADES ---------- */
@@ -161,6 +182,7 @@ function toIso_(v) {
 /** Ejecutar UNA vez: autoriza Hojas + Drive y muestra qué recibirá el sitio. */
 function probar() {
   const ev = readEvents_();
+  UrlFetchApp.fetch('https://www.google.com', { muteHttpExceptions: true });   // pide el permiso de conexión externa
   Logger.log('Registros: ' + ev.length);
   Logger.log(JSON.stringify(ev.slice(0, 3), null, 2));
 }

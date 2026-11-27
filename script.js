@@ -6,7 +6,7 @@
 const CONFIG = {
   // Pegar aquí la URL de la "aplicación web" de Apps Script (termina en /exec).
   // Mientras esté vacía, el sitio muestra DATOS DE DEMOSTRACIÓN.
-  API_URL: "https://script.google.com/macros/s/AKfycbyIlmdPKgx-R7xz_Y2SS-46sNINQUYnrXiblkairsrDvsk1WdR5X0RYook1VA1qoWg7cQ/exec",
+  API_URL: "",
   // Imagen de fondo de la portada (opcional). Ej.: "fondo.jpg". Vacío = fondo institucional.
   HERO_IMAGE: ""
 };
@@ -93,7 +93,7 @@ async function loadData() {
       if (json.error) throw new Error(json.error);
       EVENTS = (json.events || []).map(e => ({
         ...e,
-        imgs: (e.files || []).filter(f => f.type === "image").map(f => ({ id: f.id, url: f.thumb })),
+        imgs: (e.files || []).filter(f => f.type === "image").map(f => ({ id: f.id, url: f.thumb, proxy: !!f.proxy })),
         docs: (e.files || []).filter(f => f.type !== "image" && f.type !== "missing")
       }));
     }
@@ -143,7 +143,7 @@ function filtered() {
 function cardHTML(e, idx) {
   const first = (e.imgs || [])[0];
   const img = first
-    ? `<img src="${esc(first.url)}" data-fid="${esc(first.id || "")}" alt="${esc(e.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="imgFallback(this)">`
+    ? `<img src="${first.proxy ? BLANK : esc(first.url)}" ${first.proxy ? "data-proxy" : ""} data-fid="${esc(first.id || "")}" alt="${esc(e.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="imgFallback(this)">`
     : `<div class="noimg">${(e.docs || []).length ? "📄" : "📷"}</div>`;
   const n = (e.imgs || []).length;
   const cat = CATEGORIES.find(c => c.id === e._cat);
@@ -178,7 +178,11 @@ function render() {
 const io = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(x => {
   if (x.isIntersecting) { x.target.classList.add("is-in"); io.unobserve(x.target); }
 }), { threshold: .12 }) : null;
+const ioProxy = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(x => {
+  if (x.isIntersecting) { ioProxy.unobserve(x.target); imgFallback(x.target); }
+}), { rootMargin: "200px" }) : null;
 function observeReveal() {
+  document.querySelectorAll(".card img[data-proxy]:not([data-tried])").forEach(i => ioProxy ? ioProxy.observe(i) : imgFallback(i));
   document.querySelectorAll(".reveal:not(.is-in)").forEach(el => io ? io.observe(el) : el.classList.add("is-in"));
 }
 
@@ -186,15 +190,31 @@ function observeReveal() {
    Si la miniatura pública de Drive no carga (archivo no compartido, política del
    dominio, etc.), el archivo se pide al script, que lo lee con permiso del dueño. */
 const blobCache = {};
+const BLANK = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+/** Convierte HEIC/HEIF a JPEG en el navegador (respaldo si el script no pudo hacerlo). */
+let heicLib;
+function loadHeicLib() {
+  return heicLib || (heicLib = new Promise((ok, fail) => {
+    const sc = document.createElement("script");
+    sc.src = "https://cdnjs.cloudflare.com/ajax/libs/heic2any/0.0.4/heic2any.min.js";
+    sc.onload = () => ok(window.heic2any); sc.onerror = () => fail(new Error("heic2any"));
+    document.head.appendChild(sc);
+  }));
+}
 async function fetchBlobUrl(id) {
   if (blobCache[id]) return blobCache[id];
   blobCache[id] = (async () => {
-    const res = await fetch(CONFIG.API_URL + (CONFIG.API_URL.includes("?") ? "&" : "?") + "action=file&id=" + encodeURIComponent(id));
+    const res = await fetch(CONFIG.API_URL + (CONFIG.API_URL.includes("?") ? "&" : "?") + "action=file&w=1400&id=" + encodeURIComponent(id));
     const j = await res.json();
     if (j.error) throw new Error(j.error);
     const bin = atob(j.data), bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    return URL.createObjectURL(new Blob([bytes], { type: j.mime }));
+    let blob = new Blob([bytes], { type: j.mime });
+    if (/hei[cf]/i.test(j.mime) || /\.hei[cf]$/i.test(j.name)) {
+      const conv = await (await loadHeicLib())({ blob, toType: "image/jpeg", quality: 0.8 });
+      blob = Array.isArray(conv) ? conv[0] : conv;
+    }
+    return URL.createObjectURL(blob);
   })();
   try { return await blobCache[id]; } catch (e) { delete blobCache[id]; throw e; }
 }
@@ -239,11 +259,13 @@ function showPhoto(n) {
     const it = imgs[gi];
     mImg.onerror = () => imgFallback(mImg);
     mImg.dataset.fid = it.id || ""; mImg.dataset.tried = "";
-    mImg.src = it.url; mImg.alt = cur.title;
+    mImg.alt = cur.title;
+    if (it.proxy) { mImg.src = BLANK; imgFallback(mImg); } else mImg.src = it.url;
   }
   $("#gPrev").hidden = $("#gNext").hidden = imgs.length < 2;
   $("#gThumbs").innerHTML = imgs.length < 2 ? "" : imgs.map((it, k) =>
-    `<button type="button" data-k="${k}" class="${k === gi ? "is-on" : ""}" aria-label="Foto ${k + 1}"><img src="${esc(it.url)}" data-fid="${esc(it.id || "")}" alt="" referrerpolicy="no-referrer" onerror="imgFallback(this)"></button>`).join("");
+    `<button type="button" data-k="${k}" class="${k === gi ? "is-on" : ""}" aria-label="Foto ${k + 1}"><img src="${it.proxy ? BLANK : esc(it.url)}" ${it.proxy ? "data-proxy" : ""} data-fid="${esc(it.id || "")}" alt="" referrerpolicy="no-referrer" onerror="imgFallback(this)"></button>`).join("");
+  $("#gThumbs").querySelectorAll("img[data-proxy]").forEach(imgFallback);
   // Documentos adjuntos (PDF y otros)
   $("#mDocs").innerHTML = (cur.docs || []).map(d =>
     `<button type="button" class="btn btn--ghost doc" data-doc="${esc(d.id)}" data-name="${esc(d.name)}">📄 ${esc(d.name)}</button>`).join("");
