@@ -6,7 +6,7 @@
 const CONFIG = {
   // Pegar aquí la URL de la "aplicación web" de Apps Script (termina en /exec).
   // Mientras esté vacía, el sitio muestra DATOS DE DEMOSTRACIÓN.
-  API_URL: "https://script.google.com/macros/s/AKfycbzK3TsWcdjr8opDKnqncz8SQCOLSwxb-f5Mx9YHaVlcESRTwz3yvi--gcKITvvspB2r2g/exec",
+  API_URL: "",
   // Imagen de fondo de la portada (opcional). Ej.: "fondo.jpg". Vacío = fondo institucional.
   HERO_IMAGE: ""
 };
@@ -99,7 +99,6 @@ async function loadData() {
     }
     st.innerHTML = "";
     if (!CONFIG.API_URL) st.innerHTML = '<div class="demo-flag">Modo demostración: contenido de ejemplo. Configurá API_URL en script.js.</div>';
-    buildGradeFilter();
     render();
   } catch (err) {
     console.error(err);
@@ -120,14 +119,6 @@ function buildSections() {
       <div class="section__rule"></div>
       <div class="grid" id="grid-${c.id}"></div>
     </section>`).join("");
-  $("#fCat").innerHTML = '<option value="">Todas las categorías</option>' +
-    CATEGORIES.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
-}
-function buildGradeFilter() {
-  const set = new Set();
-  EVENTS.forEach(e => gradesOf(e).forEach(g => set.add(g)));
-  const list = [...set].sort((a, b) => a.localeCompare(b, "es", { numeric: true }));
-  $("#fGrade").innerHTML = '<option value="">Todos los grados</option>' + list.map(g => `<option>${esc(g)}</option>`).join("");
 }
 function filtered() {
   const q = norm(F.q);
@@ -173,7 +164,6 @@ function render() {
       ? items.map(e => { shown.push(e); return cardHTML(e, EVENTS.indexOf(e)); }).join("")
       : `<p class="empty">${(F.q || F.grade) ? "No hay publicaciones que coincidan con la búsqueda." : "Todavía no hay publicaciones en esta sección. ¡Pronto vas a ver acá nuevas experiencias!"}</p>`;
   });
-  $("#count").textContent = EVENTS.length ? `${shown.length} publicación(es) mostradas de ${EVENTS.length}` : "";
   observeReveal();
 }
 
@@ -279,14 +269,6 @@ function closeModal() { $("#modal").hidden = true; document.body.style.overflow 
 function init() {
   if (CONFIG.HERO_IMAGE) $("#heroBg").style.backgroundImage = `url(${CONFIG.HERO_IMAGE})`;
   buildSections();
-
-  // Filtros
-  $("#fSearch").oninput = e => { F.q = e.target.value; render(); };
-  $("#fCat").onchange   = e => { F.cat = e.target.value; render(); };
-  $("#fGrade").onchange = e => { F.grade = e.target.value; render(); };
-  $("#fOrder").onchange = e => { F.order = e.target.value; render(); };
-  $("#fReset").onclick  = () => { Object.assign(F, { q:"", cat:"", grade:"", order:"asc" });
-    ["fSearch","fCat","fGrade"].forEach(id => $("#" + id).value = ""); $("#fOrder").value = "asc"; render(); };
 
   // Tarjetas → modal
   $("#sections").addEventListener("click", e => { const c = e.target.closest(".card"); if (c) openModal(+c.dataset.i); });

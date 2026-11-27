@@ -49,7 +49,7 @@ img{max-width:100%;display:block}
 }
 
 /* ---------- Portada ---------- */
-.hero{position:relative;background:#e6efdc;color:var(--ink);text-align:center;overflow:hidden;padding:3.5rem 1.2rem 6rem}
+.hero{position:relative;background:#e6efdc;color:var(--ink);text-align:center;overflow:hidden;padding:3.5rem 1.2rem 5rem}
 .hero__bg{position:absolute;inset:0;background-size:cover;background-position:center;opacity:.35}
 .hero__bg:not([style*=url]){
   background:
