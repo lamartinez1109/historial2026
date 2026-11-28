@@ -137,14 +137,15 @@ function describeFiles_(ids) {
       meta.proxy = /hei[cf]/i.test(meta.mime) || /\.hei[cf]$/i.test(meta.name);
       if (!meta.proxy) meta.thumb = 'https://drive.google.com/thumbnail?id=' + id + '&sz=w' + CONFIG.IMG_WIDTH;
     }
-    return meta;
+    // El nombre del archivo (Forms le agrega el nombre de quien lo subió) no se envía al sitio.
+    return { id: meta.id, type: meta.type, mime: meta.mime, proxy: meta.proxy, thumb: meta.thumb };
   });
 }
 
 /* Entrega un archivo en base64 (solo si su ID figura en la hoja). */
 function serveFile_(id, width) {
-  const S = readSheet_(), allowed = [];
-  for (let r = 1; r < S.values.length; r++) extractIds_(S.idx.files >= 0 ? S.values[r][S.idx.files] : '').forEach(function (x) { allowed.push(x); });
+  let allowed = allowedIds_(false);                       // lista en caché (rápido)
+  if (id && allowed.indexOf(id) === -1) allowed = allowedIds_(true);   // por si es un envío recién cargado
   if (!id || allowed.indexOf(id) === -1) return json_({ error: 'Archivo no autorizado' });
   const f = DriveApp.getFileById(id);
   // Imágenes: se pide a Drive una versión JPEG redimensionada (convierte HEIC y pesa menos).
@@ -155,6 +156,17 @@ function serveFile_(id, width) {
   if (f.getSize() > CONFIG.MAX_FILE_MB * 1048576) return json_({ error: 'Archivo demasiado grande' });
   const b = f.getBlob();
   return json_({ name: f.getName(), mime: b.getContentType(), data: Utilities.base64Encode(b.getBytes()) });
+}
+
+/* IDs de archivos presentes en la hoja (se guardan 5 min para no releer la hoja en cada foto). */
+function allowedIds_(fresh) {
+  const cache = CacheService.getScriptCache();
+  if (!fresh) { const h = cache.get('allowed_ids'); if (h) return JSON.parse(h); }
+  const S = readSheet_(), ids = [];
+  for (let r = 1; r < S.values.length; r++)
+    extractIds_(S.idx.files >= 0 ? S.values[r][S.idx.files] : '').forEach(function (x) { ids.push(x); });
+  try { cache.put('allowed_ids', JSON.stringify(ids), 300); } catch (e) {}
+  return ids;
 }
 
 /* Miniatura JPEG generada por Drive, pedida con la autorización del dueño del script. */

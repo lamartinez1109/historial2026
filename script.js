@@ -306,8 +306,12 @@ function showPhoto(n) {
     `<button type="button" data-k="${k}" class="${k === gi ? "is-on" : ""}" aria-label="Foto ${k + 1}"><img src="${it.proxy ? BLANK : esc(sized(it.url, W_THUMB))}" data-w="${W_THUMB}" ${it.proxy ? "data-proxy" : ""} data-fid="${esc(it.id || "")}" alt="" referrerpolicy="no-referrer" onerror="imgFallback(this)"></button>`).join("");
   $("#gThumbs").querySelectorAll("img[data-proxy]").forEach(imgFallback);
   // Documentos adjuntos (PDF y otros)
-  $("#mDocs").innerHTML = (cur.docs || []).map(d =>
-    `<button type="button" class="btn btn--ghost doc" data-doc="${esc(d.id)}" data-name="${esc(d.name)}">📄 ${esc(d.name)}</button>`).join("");
+  $("#mDocs").innerHTML = (cur.docs || []).map((d, k, all) => {
+    const kind = d.type === "pdf" ? "PDF" : "archivo";
+    const same = all.filter(x => x.type === d.type);
+    const n = same.length > 1 ? " " + (same.indexOf(d) + 1) : "";      // "Ver PDF 1", "Ver PDF 2"…
+    return `<button type="button" class="btn btn--ghost doc" data-doc="${esc(d.id)}">📄 Ver ${kind}${n}</button>`;
+  }).join("");
 }
 function closeModal() { $("#modal").hidden = true; document.body.style.overflow = ""; }
 
