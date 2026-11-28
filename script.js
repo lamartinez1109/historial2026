@@ -6,7 +6,7 @@
 const CONFIG = {
   // Pegar aquí la URL de la "aplicación web" de Apps Script (termina en /exec).
   // Mientras esté vacía, el sitio muestra DATOS DE DEMOSTRACIÓN.
-  API_URL: "https://script.google.com/macros/s/AKfycbwI0oFBNqfgQR5HjyThyHvX_vwXQxQsuaXT586GGDoni9RUXK6EkxXa-fynNJ-ZOjOwDw/exec",
+  API_URL: "",
   // Imagen de fondo de la portada (opcional). Ej.: "fondo.jpg". Vacío = fondo institucional.
   HERO_IMAGE: ""
 };
@@ -37,20 +37,31 @@ const W_CARD = 600, W_FULL = 1400, W_THUMB = 160;          // anchos (px) pedido
 const sized = (url, w) => String(url || "").replace(/sz=w\d+/, "sz=w" + w);
 const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 
-/** Convierte en enlaces clicables las direcciones http(s):// o www. de un texto.
-    El resto del texto se escapa, así que es seguro usarlo con innerHTML. */
-function linkify(text) {
+/** Convierte las direcciones (http(s):// o www.) de un texto en botones/enlaces cortos.
+    - Videos (YouTube, Vimeo, Drive, etc.) → botón rojo con ícono ▶ "Ver video".
+    - Otros enlaces → botón discreto con el nombre del sitio.
+    mode "card": la tarjeta ya es un botón, así que solo muestra una etiqueta corta (sin enlace).
+    El resto del texto se escapa, por lo que es seguro usarlo con innerHTML. */
+const VIDEO_RE = /(youtube\.com|youtu\.be|vimeo\.com|tiktok\.com|fb\.watch|facebook\.com\/(watch|reel|share\/v)|instagram\.com\/(reel|tv)|drive\.google\.com\/file|\.mp4(\?|$))/i;
+const PLAY_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#fff"/><path d="M10 7.5v9l7-4.5z" fill="#c8202f"/></svg>';
+function linkify(text, mode = "modal") {
   const re = /(?:https?:\/\/|www\.)[^\s<>"']*[^\s<>"'.,;:!?)\]]/gi;   // excluye puntuación final
   text = String(text || "");
   let out = "", last = 0, m;
   while ((m = re.exec(text))) {
     const url = m[0], href = /^www\./i.test(url) ? "https://" + url : url;
-    out += esc(text.slice(last, m.index)) +
-      `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a>`;
+    const isVideo = VIDEO_RE.test(url);
+    let host = ""; try { host = new URL(href).hostname.replace(/^www\./, ""); } catch (e) {}
+    let html;
+    if (mode === "card") html = `<span class="chip-link">${isVideo ? "▶ Video" : "🔗 Enlace"}</span>`;
+    else if (isVideo) html = `<a class="vbtn" href="${esc(href)}" target="_blank" rel="noopener noreferrer">${PLAY_SVG}<span>Ver video</span></a>`;
+    else html = `<a class="lbtn" href="${esc(href)}" target="_blank" rel="noopener noreferrer">🔗 ${esc(host || "Enlace")}</a>`;
+    out += esc(text.slice(last, m.index)) + html;
     last = m.index + url.length;
   }
   return out + esc(text.slice(last));
 }
+
 /** Asigna un id de categoría a partir del texto libre del formulario. */
 function categoryOf(raw) {
   const t = norm(raw);
@@ -173,7 +184,7 @@ function cardHTML(e, idx) {
       <span class="chip">${esc(cat ? cat.name : "Otros")}</span>
       <h3>${esc(e.title || "Sin título")}</h3>
       <p class="meta">${esc([e.grades, fmtDate(e.date)].filter(Boolean).join(" · "))}</p>
-      <p>${esc(e.text || "")}</p>
+      <p>${linkify(e.text, "card")}</p>
     </div></button>`;
 }
 function render() {

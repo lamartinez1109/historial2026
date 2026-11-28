@@ -146,4 +146,11 @@ img{max-width:100%;display:block}
 
 @keyframes shimmer{to{background-position:-200% 0}}
 
-.modal__text a{color:#1a5fb4;font-weight:600;text-decoration:underline;word-break:break-word}.modal__text a:hover{color:var(--red)}
+
+/* Enlaces dentro de la reseña */
+.chip-link{font-weight:600;color:var(--red);white-space:nowrap}
+.vbtn,.lbtn{display:inline-flex;align-items:center;gap:.4rem;vertical-align:middle;margin:.15rem .1rem;text-decoration:none;font:600 1rem var(--f-head);letter-spacing:.03em;border-radius:999px;transition:transform .2s,background .2s}
+.vbtn{background:var(--red);color:#fff;padding:.3rem .95rem .3rem .4rem}
+.vbtn:hover{background:#a8192a;transform:translateY(-1px)}
+.lbtn{background:var(--paper);color:var(--ink);border:1.5px solid var(--line);padding:.2rem .8rem}
+.lbtn:hover{border-color:var(--ink)}
